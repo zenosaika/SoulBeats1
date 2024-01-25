@@ -57,7 +57,7 @@ client.connect((SERVER_IP, SERVER_PORT))
 pygame.init()
 clock = pygame.time.Clock()
 screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
-pygame.display.set_caption('NeneFight')
+pygame.display.set_caption('FakeRoV')
 
 # setup map and players
 rpgmap = pygame.image.load('_assets/map.png') # from https://deepnight.net/tools/rpg-map/
