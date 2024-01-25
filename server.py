@@ -18,7 +18,7 @@ def handle_connection(conn, addr, connection_id):
             data = conn.recv(2048)
             if data:
                 players_dict[connection_id] = pickle.loads(data)
-                players_list = [players_dict[id] for id in connections if id in players_dict]
+                players_list = [players_dict[id] for id in connections if (id in players_dict) and (id != connection_id)]
                 conn.send(pickle.dumps(players_list))
                 cnt = 0
             else:

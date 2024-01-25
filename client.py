@@ -1,12 +1,13 @@
 import socket
 import pygame
 import pickle
+from _thread import *
 
 from _class.Player import Player
 
 # Server Config
-SERVER_IP = '127.0.0.1'
-SERVER_PORT = 8080
+SERVER_IP = '0.tcp.ap.ngrok.io'
+SERVER_PORT = 31337
 
 # Game Config
 WINDOW_WIDTH = 500
@@ -40,6 +41,14 @@ def dict_to_player(dict):
     )
 
 
+def fetch_server():
+    global players
+    client.send(pickle.dumps(player_to_dict(me)))
+    data = client.recv(2048)
+    if data:
+        players = [dict_to_player(p) for p in pickle.loads(data)]
+
+
 # connect to server
 client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 client.connect((SERVER_IP, SERVER_PORT))
@@ -69,12 +78,6 @@ while running:
             running = False
             break
 
-    # update data from server
-    client.send(pickle.dumps(player_to_dict(me)))
-    data = client.recv(2048)
-    if data:
-        players = [dict_to_player(p) for p in pickle.loads(data)]
-
     # make a move
     keys = pygame.key.get_pressed()
     if keys[pygame.K_w] or keys[pygame.K_UP]:
@@ -86,7 +89,10 @@ while running:
     elif keys[pygame.K_d] or keys[pygame.K_RIGHT]:
         me.move(me.x+me.velocity, me.y)
 
+    # update data from server
+    start_new_thread(fetch_server, ())
+
     # update display
-    update_display(screen, players)
+    update_display(screen, players+[me])
 
 pygame.quit()
