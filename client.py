@@ -6,7 +6,7 @@ from _thread import *
 from _class.Player import Player
 
 # Server Config
-SERVER_IP = '0.0.0.0'
+SERVER_IP = '127.0.0.1'
 SERVER_PORT = 8080
 
 # Game Config
