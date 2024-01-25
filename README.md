@@ -4,8 +4,8 @@
 
 - Run Server in Container
 ```
-docker build --tag 'nenefight' .
-docker run --rm -it -p 8080:8080 nenefight
+docker build --tag 'fakerov' .
+docker run --rm -it -p 8080:8080 fakerov
 ```
 
 - Forward Port using ngrok
