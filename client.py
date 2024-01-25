@@ -6,8 +6,8 @@ from _thread import *
 from _class.Player import Player
 
 # Server Config
-SERVER_IP = '0.tcp.ap.ngrok.io'
-SERVER_PORT = 31337
+SERVER_IP = '127.0.0.1'
+SERVER_PORT = 8080
 
 # Game Config
 WINDOW_WIDTH = 500
@@ -15,38 +15,24 @@ WINDOW_HEIGHT = 500
 
 
 def update_display(screen, players):
-    screen.blit(rpgmap, (0, 0))
-    # screen.fill((0, 0, 0))
+    screen.blit(rpgmap, (0, 0)) # display map
     for p in players:
-        screen.blit(avatar, (p.x, p.y))
-        # pygame.draw.circle(screen, p.color, (p.x, p.y), 5)
+        screen.blit(avatar, (p.x, p.y)) # display player
+
+        # display player's hp
+        pygame.draw.rect(screen, (100, 100, 100), (p.x, p.y-10, 60, 10))
+        pygame.draw.rect(screen, (255, 0, 0), (p.x, p.y-9, 60*(p.hp/p.max_hp), 8))
+
     pygame.display.update()
 
 
-def player_to_dict(player):
-    return {
-        'x': player.x,
-        'y': player.y,
-        'color': player.color,
-        'velocity': player.velocity,
-    }
-
-
-def dict_to_player(dict):
-    return Player(
-        x=dict['x'], 
-        y=dict['y'], 
-        color=dict['color'],
-        velocity=dict['velocity'],
-    )
-
-
-def fetch_server():
-    global players
-    client.send(pickle.dumps(player_to_dict(me)))
+def fetch_server(me_copy):
+    global me, players
+    client.send(pickle.dumps(me_copy))
     data = client.recv(2048)
     if data:
-        players = [dict_to_player(p) for p in pickle.loads(data)]
+        me_tmp, players = pickle.loads(data)
+        me.hp = me_tmp.hp
 
 
 # connect to server
@@ -64,7 +50,7 @@ rpgmap = pygame.image.load('_assets/map.png') # from https://deepnight.net/tools
 rpgmap = pygame.transform.scale(rpgmap, (WINDOW_WIDTH, WINDOW_HEIGHT))
 avatar = pygame.image.load('_assets/avatar.png') # from https://www.avatarsinpixels.com
 avatar = pygame.transform.scale(avatar, (60, 60))
-me = Player(x=10, y=10, velocity=5, color=(255, 255, 255))
+me = Player(x=10, y=10, max_hp=100, velocity=5, color=(255, 255, 255))
 players = []
 
 # game start!
@@ -89,10 +75,18 @@ while running:
     elif keys[pygame.K_d] or keys[pygame.K_RIGHT]:
         me.move(me.x+me.velocity, me.y)
 
+    # hit
+    if keys[pygame.K_SPACE]:
+        me.hit()
+
     # update data from server
-    start_new_thread(fetch_server, ())
+    me_copy = Player(x=me.x, y=me.y, max_hp=me.max_hp, velocity=me.velocity, color=me.color, is_hit=me.is_hit)
+    start_new_thread(fetch_server, (me_copy,))
 
     # update display
     update_display(screen, players+[me])
+
+    # reset state
+    me.is_hit = False
 
 pygame.quit()
