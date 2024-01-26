@@ -17,6 +17,9 @@ WINDOW_HEIGHT = 500
 def update_display(screen, players, towers):
     screen.blit(rpgmap, (0, 0)) # display map
 
+    # update tower
+    screen.blit(vampire, (220, 220))
+
     # update player
     for p in players:
         screen.blit(avatar, (p.x, p.y)) # display player
@@ -40,6 +43,8 @@ def fetch_server(me_copy):
     if data:
         me_tmp, players, towers = pickle.loads(data)
         me.hp = me_tmp.hp
+        me.is_dead = me_tmp.is_dead
+        me.is_respawn = me_tmp.is_respawn
 
 
 # connect to server
@@ -57,7 +62,9 @@ rpgmap = pygame.image.load('_assets/map.png') # from https://deepnight.net/tools
 rpgmap = pygame.transform.scale(rpgmap, (WINDOW_WIDTH, WINDOW_HEIGHT))
 avatar = pygame.image.load('_assets/avatar.png') # from https://www.avatarsinpixels.com
 avatar = pygame.transform.scale(avatar, (60, 60))
-me = Player(x=10, y=10, max_hp=100, velocity=5, color=(255, 255, 255), team='blue')
+vampire = pygame.image.load('_assets/vampire.png') # from https://www.avatarsinpixels.com
+vampire = pygame.transform.scale(vampire, (60, 60))
+me = Player(x=15, y=15, max_hp=50, velocity=5, color=(255, 255, 255), team='blue')
 players = []
 towers = []
 
@@ -86,6 +93,15 @@ while running:
     # hit
     if keys[pygame.K_SPACE]:
         me.hit()
+
+    # if player is dead, respawn
+    if me.is_dead:
+        me.x = -100
+        me.y = -100
+
+    if me.is_respawn:
+        me.x = 15
+        me.y = 15
 
     # update data from server
     me_copy = Player(x=me.x, y=me.y, max_hp=me.max_hp, velocity=me.velocity, color=me.color, team=me.team, is_hit=me.is_hit)

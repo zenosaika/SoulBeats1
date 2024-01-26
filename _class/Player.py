@@ -8,6 +8,10 @@ class Player:
         self.color = color
         self.is_hit = is_hit
         self.team = team
+        self.is_dead = False
+        self.dead_time = 0
+        self.is_respawn = False
+        self.respawn_cooldown = 3
 
     def move(self, x, y):
         self.x = x
