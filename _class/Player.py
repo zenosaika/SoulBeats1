@@ -1,21 +1,39 @@
 class Player:
-    def __init__(self, x, y, max_hp, velocity, color, team, is_hit=False):
+    def __init__(self, x, y, character):
         self.x = x
         self.y = y
-        self.max_hp = max_hp
-        self.hp = max_hp
-        self.velocity = velocity
-        self.color = color
-        self.is_hit = is_hit
-        self.team = team
+        self.character = character
+
+        self.velocity = 5
+
+        self.hp = 100
+        self.max_hp = 100
+
+        self.use_skill1 = False
+        self.use_skill2 = False
+        self.use_skill3 = False
+
+        self.skill1_last_timestamp = 0
+        self.skill2_last_timestamp = 0
+        self.skill3_last_timestamp = 0
+
         self.is_dead = False
-        self.dead_time = 0
+        self.death_timestamp = 0
+        self.respawn_cooldown = 5
         self.is_respawn = False
-        self.respawn_cooldown = 3
 
-    def move(self, x, y):
+        self.is_walk = False
+        self.walk_direction = 'bottom'
+
+    def move_to(self, x, y):
         self.x = x
         self.y = y
 
-    def hit(self):
-        self.is_hit = True
+    def skill1(self):
+        self.use_skill1 = True
+
+    def skill2(self):
+        self.use_skill2 = True
+
+    def skill3(self):
+        self.use_skill3 = True

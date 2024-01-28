@@ -1,116 +1,340 @@
 import socket
-import pygame
 import pickle
+import pygame
+import time
+import math
 from _thread import *
 
 from _class.Player import Player
 
-# Server Config
-SERVER_IP = '127.0.0.1'
-SERVER_PORT = 8080
+
+SERVER_IP = '0.tcp.ap.ngrok.io'
+SERVER_PORT = 13145
 
 # Game Config
-WINDOW_WIDTH = 500
-WINDOW_HEIGHT = 500
+FPS = 60
+WINDOW_WIDTH = 700
+WINDOW_HEIGHT = 700
+
+# Global Variables
+room_joined = False
+players = [] # store Player objects
+towers = [] # store Tower objects
+me = Player(x=15, y=15, character='Heron')
+
+# Skills
+skills = {
+    1: {
+        'damage': 20,
+        'radius': 50,
+        'cooldown': 2,
+    },
+    2: {
+        'damage': 20,
+        'radius': 200,
+        'cooldown': 5,
+    },
+    3: {
+        'damage': 40,
+        'radius': 100,
+        'cooldown': 10,
+    },
+}
 
 
-def update_display(screen, players, towers):
-    screen.blit(rpgmap, (0, 0)) # display map
+def load_image(path, resize_to=(-1, -1)):
+    image = pygame.image.load(path)
+    if resize_to != (-1, -1):
+        image = pygame.transform.scale(image, resize_to)
+    return image
 
-    # update tower
-    screen.blit(vampire, (220, 220))
+images = {
+    'Map': load_image('_asset/map.png', resize_to=(WINDOW_WIDTH, WINDOW_HEIGHT)),
+    'Small_Tower': load_image('_asset/small_tower.png', resize_to=(60, 60)),
+    'Destroyed_Tower': load_image('_asset/destroyed_tower.png', resize_to=(60, 60)),
+}
 
-    # update player
-    for p in players:
-        screen.blit(avatar, (p.x, p.y)) # display player
+def image_at(sheet, rectangle, colorkey = None):
+    # loads image from x, y, x+offset, y+offset
+    rect = pygame.Rect(rectangle)
+    image = pygame.Surface(rect.size)
+    image.blit(sheet, (0, 0), rect)
 
-        # display player's hp
-        pygame.draw.rect(screen, (100, 100, 100), (p.x, p.y-10, 60, 10))
-        pygame.draw.rect(screen, (255, 0, 0), (p.x, p.y-9, 60*(p.hp/p.max_hp), 8))
+    if colorkey is not None:
+        if colorkey == -1:
+            colorkey = image.get_at((0,0))
+        image.set_colorkey(colorkey, pygame.RLEACCEL)
 
-    # update tower
-    for tower in towers:
-        if tower.is_shoot:
-            pygame.draw.line(screen, (237, 47, 50), (tower.x, tower.y), tower.shoot_to_xy, 3) 
+    return image
 
-    pygame.display.update()
+def images_at(sheet, rects, colorkey = None):
+    # loads multiple images, supply a list of coordinates
+    return [image_at(sheet, rect, colorkey) for rect in rects]
 
+def get_sprite_rects(y_start, num_of_col, col_width, row_height):
+    return [(col*col_width, y_start, col_width, row_height) for col in range(num_of_col)]
 
-def fetch_server(me_copy):
-    global me, players, towers
-    client.send(pickle.dumps(me_copy))
-    data = client.recv(2048)
-    if data:
-        me_tmp, players, towers = pickle.loads(data)
+animations = {
+    'walk_top': {
+        'frame_cnt': 0,
+        'images': images_at(
+            sheet=load_image('_asset/king_heron.png'),
+            rects=get_sprite_rects(518, 9, 64, 70),
+            colorkey=-1
+        )
+    },
+    'walk_left': {
+        'frame_cnt': 0,
+        'images': images_at(
+            sheet=load_image('_asset/king_heron.png'),
+            rects=get_sprite_rects(582, 9, 64, 70),
+            colorkey=-1
+        )
+    },
+    'walk_bottom': {
+        'frame_cnt': 0,
+        'images': images_at(
+            sheet=load_image('_asset/king_heron.png'),
+            rects=get_sprite_rects(646, 9, 64, 70),
+            colorkey=-1
+        )
+    },
+    'walk_right': {
+        'frame_cnt': 0,
+        'images': images_at(
+            sheet=load_image('_asset/king_heron.png'),
+            rects=get_sprite_rects(710, 9, 64, 70),
+            colorkey=-1
+        )
+    },
+}
+
+def play_animation(animation_name, duration):
+    ani = animations[animation_name]
+    duration_per_frame = 1 / FPS # seconds
+    duration_per_image = duration / len(ani['images']) # seconds
+    frame_per_image = duration_per_image / duration_per_frame
+
+    if math.floor(ani['frame_cnt']/frame_per_image) >= len(ani['images']):
+        ani['frame_cnt'] = 0
+
+    image_at_this_frame = ani['images'][math.floor(ani['frame_cnt']/frame_per_image)] 
+    ani['frame_cnt'] += 1
+
+    return image_at_this_frame
+
+def handle_packet(packet):
+    global me, players, towers, room_joined
+    header = packet['header']
+    body = packet['body']
+
+    if header == 'room_created':
+        room_joined = True
+        print('[ROOM]: Welcome!')
+        print(f'[ROOM]: This room id is {body["room_id"]}')
+
+    elif header == 'join_success':
+        room_joined = True
+        print('[ROOM]: Welcome!')
+
+    elif header == 'join_failed':
+        print(f'[SERVER]: {body["error"]}')
+
+    elif header == 'update_server_state':
+        players = body['players']
+        towers = body['towers']
+        me_tmp = body['me']
+
         me.hp = me_tmp.hp
         me.is_dead = me_tmp.is_dead
         me.is_respawn = me_tmp.is_respawn
+        me.use_skill1 = False
+        me.use_skill2 = False
+        me.use_skill3 = False
+        me.skill1_last_timestamp = me_tmp.skill1_last_timestamp
+        me.skill2_last_timestamp = me_tmp.skill2_last_timestamp
+        me.skill3_last_timestamp = me_tmp.skill3_last_timestamp
+        # update me here!
 
+def handle_connection(s, mode, room_id=-1):
+    if mode == 'update_state':
+        s.send(pickle.dumps({
+            'header': 'update_state',
+            'body': {
+                'me': me
+            }
+        }))
+    
+    elif mode == 'create_room':
+        s.send(pickle.dumps({
+            'header': 'create_room',
+            'body': ''
+        }))
 
-# connect to server
-client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-client.connect((SERVER_IP, SERVER_PORT))
+    elif mode == 'join_room':
+        s.send(pickle.dumps({
+            'header': 'join_room',
+            'body': {'room_id': room_id}
+        }))
 
-# setup pygame
-pygame.init()
-clock = pygame.time.Clock()
-screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
-pygame.display.set_caption('FakeRoV')
+    try:
+        packet = s.recv(2048) # return packet or null
+        if packet:
+            packet = pickle.loads(packet)
+            handle_packet(packet)
+    except Exception as e:
+        ...
 
-# setup map and players
-rpgmap = pygame.image.load('_assets/map.png') # from https://deepnight.net/tools/rpg-map/
-rpgmap = pygame.transform.scale(rpgmap, (WINDOW_WIDTH, WINDOW_HEIGHT))
-avatar = pygame.image.load('_assets/avatar.png') # from https://www.avatarsinpixels.com
-avatar = pygame.transform.scale(avatar, (60, 60))
-vampire = pygame.image.load('_assets/vampire.png') # from https://www.avatarsinpixels.com
-vampire = pygame.transform.scale(vampire, (60, 60))
-me = Player(x=15, y=15, max_hp=50, velocity=5, color=(255, 255, 255), team='blue')
-players = []
-towers = []
+def draw_hp(screen, object, pos):
+    x, y = pos
+    hp_width = 60
+    hp_height = 10
+    pygame.draw.rect(screen, color=(100, 100, 100), rect=(x, y, hp_width, hp_height))
+    pygame.draw.rect(screen, color=(255, 0, 0), rect=(x, y-1, hp_width*(object.hp/object.max_hp), hp_height-2))
 
-# game start!
-running = True
-while running:
-    clock.tick(60) # 60 fps
+def render_player(screen, p):
+    if p.is_walk:
+        screen.blit(play_animation(f'walk_{p.walk_direction}', 1.5), (p.x, p.y))
+    else:
+        screen.blit(animations[f'walk_{p.walk_direction}']['images'][0], (p.x, p.y))
+    draw_hp(screen, p, pos=(p.x, p.y-10))
 
-    # for quit game
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            running = False
-            break
+def update_display(screen):
+    # render map
+    screen.blit(images['Map'], (0, 0))
 
-    # make a move
+    # render me
+    render_player(screen, me)
+
+    # render other players
+    for p in players:
+        render_player(screen, p)
+    
+    # render towers
+    for t in towers:
+        screen.blit(images[t.type], (t.x, t.y))
+        if t.type != 'Destroyed_Tower':
+            draw_hp(screen, t, pos=(t.x, t.y-10))
+            # draw laser line
+            if t.is_shoot:
+                pygame.draw.line(screen, color=(237, 47, 50), start_pos=(t.x, t.y), end_pos=t.shoot_to_xy, width=3) 
+
+    pygame.display.update()
+
+def handle_move():
     keys = pygame.key.get_pressed()
     if keys[pygame.K_w] or keys[pygame.K_UP]:
-        me.move(me.x, me.y-me.velocity)
+        me.move_to(me.x, me.y-me.velocity)
+        me.is_walk = True
+        me.walk_direction = 'top'
     elif keys[pygame.K_a] or keys[pygame.K_LEFT]:
-        me.move(me.x-me.velocity, me.y)
+        me.move_to(me.x-me.velocity, me.y)
+        me.is_walk = True
+        me.walk_direction = 'left'
     elif keys[pygame.K_s] or keys[pygame.K_DOWN]:
-        me.move(me.x, me.y+me.velocity)
+        me.move_to(me.x, me.y+me.velocity)
+        me.is_walk = True
+        me.walk_direction = 'bottom'
     elif keys[pygame.K_d] or keys[pygame.K_RIGHT]:
-        me.move(me.x+me.velocity, me.y)
+        me.move_to(me.x+me.velocity, me.y)
+        me.is_walk = True
+        me.walk_direction = 'right'
+    else:
+        me.is_walk = False
 
-    # hit
-    if keys[pygame.K_SPACE]:
-        me.hit()
+def dead():
+    # move player to outside the map
+    me.x = me.y = -100
 
-    # if player is dead, respawn
-    if me.is_dead:
-        me.x = -100
-        me.y = -100
+def respawn():
+    # move player back to the map
+    me.x = me.y = 15
 
-    if me.is_respawn:
-        me.x = 15
-        me.y = 15
+def distance(x1, y1, x2, y2):
+    return ((x1-x2)**2 + (y1-y2)**2) ** 0.5
 
-    # update data from server
-    me_copy = Player(x=me.x, y=me.y, max_hp=me.max_hp, velocity=me.velocity, color=me.color, team=me.team, is_hit=me.is_hit)
-    start_new_thread(fetch_server, (me_copy,))
+def handle_skill():
+    timestamp_now = time.time()
+    keys = pygame.key.get_pressed()
 
-    # update display
-    update_display(screen, players+[me], towers)
+    # Skill 1 : Soul Blade
+    if keys[pygame.K_SPACE] and timestamp_now - me.skill1_last_timestamp > skills[1]['cooldown']:
+        me.skill1_last_timestamp = timestamp_now
+        me.skill1()
 
-    # reset state
-    me.is_hit = False
+    # Skill 2 : Soul Dash
+    elif keys[pygame.K_e] and timestamp_now - me.skill2_last_timestamp > skills[2]['cooldown']:
+        me.skill1_last_timestamp = timestamp_now
+        target_object = me
+        min_distance = 999999
 
-pygame.quit()
+        for p in players:
+            dist = distance(me.x, me.y, p.x, p.y)
+            if dist <= skills[2]['radius'] and dist < min_distance:
+                min_distance = dist
+                target_object = p
+        
+        for t in towers:
+            if t.type != 'Destroyed_Tower':
+                dist = distance(me.x, me.y, t.x, t.y)
+                if dist <= skills[2]['radius'] and dist < min_distance:
+                    min_distance = dist
+                    target_object = t
+
+        # dash to target object
+        me.x = target_object.x
+        me.y = target_object.y
+
+        me.skill2()
+
+    elif keys[pygame.K_q] and timestamp_now - me.skill3_last_timestamp > skills[3]['cooldown']:
+        me.skill1_last_timestamp = timestamp_now
+        me.skill3()
+
+def main():
+    # create TCP socket and connect to server
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.connect((SERVER_IP, SERVER_PORT))
+
+    # setup pygame
+    pygame.init()
+    clock = pygame.time.Clock()
+    screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
+    pygame.display.set_caption('Soul Beats 1')
+
+    # create or join room
+    print('Welcome to Soul Beats 1 !!')
+    print('1) Create New Room\n2) Join Room with Room ID')
+    choice = input('Select 1 or 2 >> ')
+    if choice == '1':
+        handle_connection(s, mode='create_room')
+    else:
+        while not room_joined:
+            room_id = int(input('Room ID >> '))
+            handle_connection(s, mode='join_room', room_id=room_id)
+
+    running = True
+    while running: # game main loop
+        clock.tick(FPS) # set FPS
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+                break
+
+        handle_move()
+        handle_skill()
+
+        if me.is_dead:
+            dead()
+        if me.is_respawn:
+            respawn()
+
+        start_new_thread(handle_connection, (s, 'update_state'))
+        update_display(screen)
+
+    s.close()
+    pygame.quit()
+
+
+main()
