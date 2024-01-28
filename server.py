@@ -34,7 +34,7 @@ skills = {
 
 def create_towers():
     return {
-        'center': Tower(320, 320, 40, 20, 120, 4, 'noteam', 'Small_Tower'),
+        'center': Tower(310, 310, 40, 20, 120, 4, 'noteam', 'Small_Tower'),
     }
 
 def create_room(conn, connection_id):

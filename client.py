@@ -3,13 +3,13 @@ import pickle
 import pygame
 import time
 import math
-from _thread import *
+from _thread import start_new_thread
 
 from _class.Player import Player
 
 
-SERVER_IP = '0.tcp.ap.ngrok.io'
-SERVER_PORT = 13145
+SERVER_IP = '127.0.0.1'
+SERVER_PORT = 8080
 
 # Game Config
 FPS = 60
@@ -50,11 +50,11 @@ def load_image(path, resize_to=(-1, -1)):
 
 images = {
     'Map': load_image('_asset/map.png', resize_to=(WINDOW_WIDTH, WINDOW_HEIGHT)),
-    'Small_Tower': load_image('_asset/small_tower.png', resize_to=(60, 60)),
-    'Destroyed_Tower': load_image('_asset/destroyed_tower.png', resize_to=(60, 60)),
+    'Small_Tower': load_image('_asset/small_tower.png', resize_to=(80, 80)),
+    'Destroyed_Tower': load_image('_asset/destroyed_tower.png', resize_to=(80, 80)),
 }
 
-def image_at(sheet, rectangle, colorkey = None):
+def image_at(sheet, rectangle, resize_to, colorkey=None):
     # loads image from x, y, x+offset, y+offset
     rect = pygame.Rect(rectangle)
     image = pygame.Surface(rect.size)
@@ -65,11 +65,14 @@ def image_at(sheet, rectangle, colorkey = None):
             colorkey = image.get_at((0,0))
         image.set_colorkey(colorkey, pygame.RLEACCEL)
 
+    if resize_to != (-1, -1):
+        image = pygame.transform.scale(image, resize_to)
+
     return image
 
-def images_at(sheet, rects, colorkey = None):
+def images_at(sheet, rects, resize_to, colorkey=None):
     # loads multiple images, supply a list of coordinates
-    return [image_at(sheet, rect, colorkey) for rect in rects]
+    return [image_at(sheet, rect, resize_to, colorkey) for rect in rects]
 
 def get_sprite_rects(y_start, num_of_col, col_width, row_height):
     return [(col*col_width, y_start, col_width, row_height) for col in range(num_of_col)]
@@ -78,32 +81,45 @@ animations = {
     'walk_top': {
         'frame_cnt': 0,
         'images': images_at(
-            sheet=load_image('_asset/king_heron.png'),
-            rects=get_sprite_rects(518, 9, 64, 70),
+            sheet=load_image('_asset/king_frost.png'),
+            rects=get_sprite_rects(514, 9, 64, 64),
+            resize_to=(80, 80),
             colorkey=-1
         )
     },
     'walk_left': {
         'frame_cnt': 0,
         'images': images_at(
-            sheet=load_image('_asset/king_heron.png'),
-            rects=get_sprite_rects(582, 9, 64, 70),
+            sheet=load_image('_asset/king_frost.png'),
+            rects=get_sprite_rects(578, 9, 64, 64),
+            resize_to=(80, 80),
             colorkey=-1
         )
     },
     'walk_bottom': {
         'frame_cnt': 0,
         'images': images_at(
-            sheet=load_image('_asset/king_heron.png'),
-            rects=get_sprite_rects(646, 9, 64, 70),
+            sheet=load_image('_asset/king_frost.png'),
+            rects=get_sprite_rects(643, 9, 64, 64),
+            resize_to=(80, 80),
             colorkey=-1
         )
     },
     'walk_right': {
         'frame_cnt': 0,
         'images': images_at(
-            sheet=load_image('_asset/king_heron.png'),
-            rects=get_sprite_rects(710, 9, 64, 70),
+            sheet=load_image('_asset/king_frost.png'),
+            rects=get_sprite_rects(707, 9, 64, 64),
+            resize_to=(80, 80),
+            colorkey=-1
+        )
+    },
+    'magic_wand': {
+        'frame_cnt': 0,
+        'images': images_at(
+            sheet=load_image('_asset/king_frost.png'),
+            rects=get_sprite_rects(1792, 23, 64, 84)[1::3],
+            resize_to=(80, 105),
             colorkey=-1
         )
     },
@@ -145,16 +161,23 @@ def handle_packet(packet):
         towers = body['towers']
         me_tmp = body['me']
 
+        timestamp_now = time.time()
+
+        # update me here!
         me.hp = me_tmp.hp
         me.is_dead = me_tmp.is_dead
         me.is_respawn = me_tmp.is_respawn
-        me.use_skill1 = False
-        me.use_skill2 = False
-        me.use_skill3 = False
         me.skill1_last_timestamp = me_tmp.skill1_last_timestamp
         me.skill2_last_timestamp = me_tmp.skill2_last_timestamp
         me.skill3_last_timestamp = me_tmp.skill3_last_timestamp
-        # update me here!
+
+        # reset flag
+        if timestamp_now - me.skill1_last_timestamp > 0.7:
+            me.use_skill1 = False
+        if timestamp_now - me.skill2_last_timestamp > 0.7:
+            me.use_skill2 = False
+        if timestamp_now - me.skill3_last_timestamp > 0.7:
+            me.use_skill3 = False
 
 def handle_connection(s, mode, room_id=-1):
     if mode == 'update_state':
@@ -187,17 +210,19 @@ def handle_connection(s, mode, room_id=-1):
 
 def draw_hp(screen, object, pos):
     x, y = pos
-    hp_width = 60
+    hp_width = 70
     hp_height = 10
     pygame.draw.rect(screen, color=(100, 100, 100), rect=(x, y, hp_width, hp_height))
     pygame.draw.rect(screen, color=(255, 0, 0), rect=(x, y-1, hp_width*(object.hp/object.max_hp), hp_height-2))
 
 def render_player(screen, p):
-    if p.is_walk:
+    if p.use_skill1 or p.use_skill2 or p.use_skill3:
+        screen.blit(play_animation('magic_wand', 0.7), (p.x, p.y))
+    elif p.is_walk:
         screen.blit(play_animation(f'walk_{p.walk_direction}', 1.5), (p.x, p.y))
     else:
         screen.blit(animations[f'walk_{p.walk_direction}']['images'][0], (p.x, p.y))
-    draw_hp(screen, p, pos=(p.x, p.y-10))
+    draw_hp(screen, p, pos=(p.x+7, p.y-10))
 
 def update_display(screen):
     # render map
@@ -214,7 +239,7 @@ def update_display(screen):
     for t in towers:
         screen.blit(images[t.type], (t.x, t.y))
         if t.type != 'Destroyed_Tower':
-            draw_hp(screen, t, pos=(t.x, t.y-10))
+            draw_hp(screen, t, pos=(t.x+6, t.y-15))
             # draw laser line
             if t.is_shoot:
                 pygame.draw.line(screen, color=(237, 47, 50), start_pos=(t.x, t.y), end_pos=t.shoot_to_xy, width=3) 
@@ -330,7 +355,11 @@ def main():
         if me.is_respawn:
             respawn()
 
-        start_new_thread(handle_connection, (s, 'update_state'))
+        try:
+            start_new_thread(handle_connection, (s, 'update_state'))
+        except Exception as e:
+            print(e)
+
         update_display(screen)
 
     s.close()
