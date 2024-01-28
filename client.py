@@ -50,8 +50,6 @@ def load_image(path, resize_to=(-1, -1)):
 
 images = {
     'Map': load_image('_asset/map.png', resize_to=(WINDOW_WIDTH, WINDOW_HEIGHT)),
-    'Small_Tower': load_image('_asset/small_tower.png', resize_to=(80, 80)),
-    'Destroyed_Tower': load_image('_asset/destroyed_tower.png', resize_to=(80, 80)),
 }
 
 def image_at(sheet, rectangle, resize_to, colorkey=None):
@@ -147,6 +145,42 @@ animations = {
             sheet=load_image('_asset/skill3.png'),
             rects=get_sprite_rects(0, 10, 58, 58),
             resize_to=(200, 200),
+            colorkey=-1
+        )
+    },
+    'megia_stand': {
+        'frame_cnt': 0,
+        'images': images_at(
+            sheet=load_image('_asset/megia.png'),
+            rects=get_sprite_rects(128, 7, 64, 64),
+            resize_to=(80, 80),
+            colorkey=-1
+        )
+    },
+    'megia_attack': {
+        'frame_cnt': 0,
+        'images': images_at(
+            sheet=load_image('_asset/megia.png'),
+            rects=get_sprite_rects(1792, 23, 64, 64)[1::3],
+            resize_to=(80, 80),
+            colorkey=-1
+        )
+    },
+    'megia_skill': {
+        'frame_cnt': 0,
+        'images': images_at(
+            sheet=load_image('_asset/megia_skill.png'),
+            rects=get_sprite_rects(0, 10, 41, 41),
+            resize_to=(240, 240),
+            colorkey=-1
+        )
+    },
+    'megia_dead': {
+        'frame_cnt': 0,
+        'images': images_at(
+            sheet=load_image('_asset/megia.png'),
+            rects=get_sprite_rects(1281, 6, 64, 64),
+            resize_to=(80, 80),
             colorkey=-1
         )
     },
@@ -259,6 +293,17 @@ def render_player(screen, p):
         screen.blit(animations[f'walk_{p.walk_direction}']['images'][0], (p.x, p.y))
     draw_hp(screen, p, pos=(p.x+7, p.y-10))
 
+def render_tower(screen, t):
+    if t.type != 'Destroyed_Tower':
+        screen.blit(play_animation('megia_stand', 2), (t.x, t.y))
+        draw_hp(screen, t, pos=(t.x+7, t.y-10))
+        
+        if t.is_shoot:
+            screen.blit(play_animation('megia_skill', 0.7), (t.x-75, t.y-40))
+            screen.blit(play_animation('megia_attack', 0.7), (t.x, t.y))
+    else:
+        screen.blit(animations['megia_dead']['images'][4], (t.x, t.y)) 
+
 def update_display(screen):
     # render map
     screen.blit(images['Map'], (0, 0))
@@ -272,12 +317,7 @@ def update_display(screen):
     
     # render towers
     for t in towers:
-        screen.blit(images[t.type], (t.x, t.y))
-        if t.type != 'Destroyed_Tower':
-            draw_hp(screen, t, pos=(t.x+6, t.y-15))
-            # draw laser line
-            if t.is_shoot:
-                pygame.draw.line(screen, color=(237, 47, 50), start_pos=(t.x, t.y), end_pos=t.shoot_to_xy, width=3) 
+        render_tower(screen, t)
 
     pygame.display.update()
 
@@ -304,7 +344,7 @@ def handle_move():
 
 def dead():
     # move player to outside the map
-    me.x = me.y = -100
+    me.x = me.y = -500
 
 def respawn():
     # move player back to the map
