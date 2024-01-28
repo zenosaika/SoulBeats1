@@ -123,6 +123,33 @@ animations = {
             colorkey=-1
         )
     },
+    'skill1': {
+        'frame_cnt': 0,
+        'images': images_at(
+            sheet=load_image('_asset/skill1.png'),
+            rects=get_sprite_rects(0, 10, 26, 26),
+            resize_to=(120, 120),
+            colorkey=-1
+        )
+    },
+    'skill2': {
+        'frame_cnt': 0,
+        'images': images_at(
+            sheet=load_image('_asset/skill2.png'),
+            rects=get_sprite_rects(0, 10, 41, 41),
+            resize_to=(150, 150),
+            colorkey=-1
+        )
+    },
+    'skill3': {
+        'frame_cnt': 0,
+        'images': images_at(
+            sheet=load_image('_asset/skill3.png'),
+            rects=get_sprite_rects(0, 10, 58, 58),
+            resize_to=(200, 200),
+            colorkey=-1
+        )
+    },
 }
 
 def play_animation(animation_name, duration):
@@ -217,6 +244,14 @@ def draw_hp(screen, object, pos):
 
 def render_player(screen, p):
     if p.use_skill1 or p.use_skill2 or p.use_skill3:
+        # animate procedural orb first
+        if p.use_skill1:
+            screen.blit(play_animation('skill1', 0.7), (p.x-18, p.y))
+        if p.use_skill2:
+            screen.blit(play_animation('skill2', 0.7), (p.x-33, p.y))
+        if p.use_skill3:
+            screen.blit(play_animation('skill3', 0.7), (p.x-60, p.y-30))
+        # then animate character and his wand
         screen.blit(play_animation('magic_wand', 0.7), (p.x, p.y))
     elif p.is_walk:
         screen.blit(play_animation(f'walk_{p.walk_direction}', 1.5), (p.x, p.y))
