@@ -276,6 +276,11 @@ def draw_hp(screen, object, pos):
     pygame.draw.rect(screen, color=(100, 100, 100), rect=(x, y, hp_width, hp_height))
     pygame.draw.rect(screen, color=(255, 0, 0), rect=(x, y-1, hp_width*(object.hp/object.max_hp), hp_height-2))
 
+def draw_username(screen, p, pos):
+    x, y = pos
+    font = pygame.font.SysFont('Comic Sans MS', 16)
+    screen.blit(font.render(p.username, False, (255, 255, 255)), pos)
+
 def render_player(screen, p):
     if p.use_skill1 or p.use_skill2 or p.use_skill3:
         # animate procedural orb first
@@ -292,6 +297,7 @@ def render_player(screen, p):
     else:
         screen.blit(animations[f'walk_{p.walk_direction}']['images'][0], (p.x, p.y))
     draw_hp(screen, p, pos=(p.x+7, p.y-10))
+    draw_username(screen, p, pos=(p.x+7, p.y-35))
 
 def render_tower(screen, t):
     if t.type != 'Destroyed_Tower':
@@ -398,12 +404,15 @@ def main():
 
     # setup pygame
     pygame.init()
+    pygame.font.init()
     clock = pygame.time.Clock()
     screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
     pygame.display.set_caption('Soul Beats 1')
 
     # create or join room
     print('Welcome to Soul Beats 1 !!')
+    while not (1 <= len(me.username) <= 10):
+        me.username = input('Username >> ')
     print('1) Create New Room\n2) Join Room with Room ID')
     choice = input('Select 1 or 2 >> ')
     if choice == '1':

@@ -141,6 +141,7 @@ def handle_update_state(conn, connection_id, players, this_player, towers):
     p = players[connection_id] # p is a Player object
     p.x = this_player.x
     p.y = this_player.y
+    p.username = this_player.username
     p.use_skill1 = this_player.use_skill1
     p.use_skill2 = this_player.use_skill2
     p.use_skill3 = this_player.use_skill3
