@@ -18,8 +18,9 @@ ngrok tcp 8080
 - run client.py to join the server
 
 ## Credits
-[Character Sprite Generator](https://sanderfrenken.github.io/Universal-LPC-Spritesheet-Character-Generator)
-[Procedural Orb Generator](https://itch.io/queue/c/1866035/pixel-art-generators?game_id=1495273)
+- [Character Sprite Generator](https://sanderfrenken.github.io/Universal-LPC-Spritesheet-Character-Generator)
+- [Procedural Orb Generator](https://itch.io/queue/c/1866035/pixel-art-generators?game_id=1495273)
+- [RPG Map Maker](https://deepnight.net/tools/rpg-map/)
 
 ## Project Overview
 <img src="https://github.com/zenosaika/SoulBeats1/blob/main/project_overview.png">
