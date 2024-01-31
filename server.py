@@ -2,6 +2,7 @@ import socket
 import pickle
 import random
 import time
+import math
 from _thread import start_new_thread
 
 from _class.Tower import Tower
@@ -12,6 +13,11 @@ SERVER_PORT = 8080
 # Server States
 connections = {}
 rooms = {}
+
+GRID_COL = 20
+GRID_ROW = 20
+WINDOW_WIDTH = 700
+WINDOW_HEIGHT = 700
 
 # Skills
 skills = {
@@ -43,7 +49,7 @@ def create_room(conn, connection_id):
     while room_id in rooms:
         room_id = random.randrange(1000, 10000)
 
-    rooms[room_id] = {'players':{}, 'towers': create_towers()} # create new room
+    rooms[room_id] = {'players':{}, 'towers': create_towers(), 'grid':[[-1]*GRID_COL for _ in range(GRID_ROW)]} # create new room
     connections[connection_id]['room_id'] = room_id # move this connection to the room
 
     # send room_id to client
@@ -132,7 +138,37 @@ def tower_attack(connection_id, players, towers):
                 tower.last_shot_timestamp = timestamp_now
                 this_player.hp -= tower.damage
 
-def handle_update_state(conn, connection_id, players, this_player, towers):
+def paint_grid(connection_id, players):
+    p = players[connection_id]
+
+    grid_width = WINDOW_WIDTH / GRID_COL
+    grid_height = WINDOW_HEIGHT / GRID_ROW
+
+    room_id = connections[connection_id]['room_id']
+
+    # paint grid
+    col = math.floor(p.x / grid_width) # col
+    row = math.floor(p.y / grid_height) # row
+    
+    if 0 < row < GRID_ROW and 0 < col < GRID_COL:
+        rooms[room_id]['grid'][row][col] = [connection_id, p.color]
+
+def get_scores(players, grid):
+    # init
+    scores = {}
+    for k, v in players.items():
+        scores[k] = {'username': v.username, 'score': 0}
+    
+    # loop through grid
+    for i in range(GRID_ROW):
+        for j in range(GRID_COL):
+            if grid[i][j] != -1:
+                # connection_id = grid[i][j]['connection_id']
+                connection_id = grid[i][j][0]
+                scores[connection_id]['score'] += 1
+
+
+def handle_update_state(conn, connection_id, players, this_player, towers, grid):
     # for first time
     if connection_id not in players:
         players[connection_id] = this_player
@@ -151,6 +187,7 @@ def handle_update_state(conn, connection_id, players, this_player, towers):
 
     handle_skill(connection_id, players, towers)
     tower_attack(connection_id, players, towers)
+    paint_grid(connection_id, players)
 
     timestamp_now = time.time()
 
@@ -176,7 +213,9 @@ def handle_update_state(conn, connection_id, players, this_player, towers):
         'body': {
             'me': p,
             'players': [v for k, v in players.items() if k!=connection_id],
-            'towers': [v for v in towers.values()]
+            'towers': [v for v in towers.values()],
+            'grid': grid,
+            'scores': get_scores(players, grid),
         }
     }))
 
@@ -199,21 +238,22 @@ def handle_packet(conn, packet, connection_id):
         room_id = connections[connection_id]['room_id'] # get current room_id of this player 
         players = rooms[room_id]['players'] # dict of Player object of that room
         towers = rooms[room_id]['towers'] # dict of Player object of that room
+        grid = rooms[room_id]['grid']
         this_player = body['me']
-        handle_update_state(conn, connection_id, players, this_player, towers)
+        handle_update_state(conn, connection_id, players, this_player, towers, grid)
 
 def handle_connection(conn, addr, connection_id):
     while True:
-        
+
         try:
-            packet = conn.recv(2048) # return packet or null
+            packet = conn.recv(4096) # return packet or null
             if packet:
                 packet = pickle.loads(packet)
                 handle_packet(conn, packet, connection_id) 
             else:
-                break # client disconnected      
-        except Exception as e:
-            ...
+                break # client disconnected
+        except:
+            break
 
     conn.close()
     print(f'{addr} disconnected.')

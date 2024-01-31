@@ -15,12 +15,16 @@ SERVER_PORT = 8080
 FPS = 60
 WINDOW_WIDTH = 700
 WINDOW_HEIGHT = 700
+GRID_COL = 20
+GRID_ROW = 20
 
 # Global Variables
 room_joined = False
 players = [] # store Player objects
 towers = [] # store Tower objects
-me = Player(x=15, y=15, character='Heron')
+grid = [[-1]*GRID_COL for _ in range(GRID_ROW)]
+scores = {}
+me = Player(x=35, y=35, character='Heron')
 
 # Skills
 skills = {
@@ -48,10 +52,6 @@ def load_image(path, resize_to=(-1, -1)):
         image = pygame.transform.scale(image, resize_to)
     return image
 
-images = {
-    'Map': load_image('_asset/map.png', resize_to=(WINDOW_WIDTH, WINDOW_HEIGHT)),
-}
-
 def image_at(sheet, rectangle, resize_to, colorkey=None):
     # loads image from x, y, x+offset, y+offset
     rect = pygame.Rect(rectangle)
@@ -67,6 +67,10 @@ def image_at(sheet, rectangle, resize_to, colorkey=None):
         image = pygame.transform.scale(image, resize_to)
 
     return image
+
+images = {
+    'Map': load_image('_asset/map.png', resize_to=(WINDOW_WIDTH, WINDOW_HEIGHT)),
+}
 
 def images_at(sheet, rects, resize_to, colorkey=None):
     # loads multiple images, supply a list of coordinates
@@ -201,7 +205,7 @@ def play_animation(animation_name, duration):
     return image_at_this_frame
 
 def handle_packet(packet):
-    global me, players, towers, room_joined
+    global me, players, towers, grid, scores, room_joined
     header = packet['header']
     body = packet['body']
 
@@ -220,6 +224,8 @@ def handle_packet(packet):
     elif header == 'update_server_state':
         players = body['players']
         towers = body['towers']
+        grid = body['grid']
+        scores = body['scores']
         me_tmp = body['me']
 
         timestamp_now = time.time()
@@ -262,7 +268,7 @@ def handle_connection(s, mode, room_id=-1):
         }))
 
     try:
-        packet = s.recv(2048) # return packet or null
+        packet = s.recv(4096) # return packet or null
         if packet:
             packet = pickle.loads(packet)
             handle_packet(packet)
@@ -277,27 +283,28 @@ def draw_hp(screen, object, pos):
     pygame.draw.rect(screen, color=(255, 0, 0), rect=(x, y-1, hp_width*(object.hp/object.max_hp), hp_height-2))
 
 def draw_username(screen, p, pos):
-    x, y = pos
     font = pygame.font.SysFont('Comic Sans MS', 16)
     screen.blit(font.render(p.username, False, (255, 255, 255)), pos)
 
 def render_player(screen, p):
+    x = p.x - 40
+    y = p.y - 60
     if p.use_skill1 or p.use_skill2 or p.use_skill3:
         # animate procedural orb first
         if p.use_skill1:
-            screen.blit(play_animation('skill1', 0.7), (p.x-18, p.y))
+            screen.blit(play_animation('skill1', 0.7), (x-18, y))
         if p.use_skill2:
-            screen.blit(play_animation('skill2', 0.7), (p.x-33, p.y))
+            screen.blit(play_animation('skill2', 0.7), (x-33, y))
         if p.use_skill3:
-            screen.blit(play_animation('skill3', 0.7), (p.x-60, p.y-30))
+            screen.blit(play_animation('skill3', 0.7), (x-60, y-30))
         # then animate character and his wand
-        screen.blit(play_animation('magic_wand', 0.7), (p.x, p.y))
+        screen.blit(play_animation('magic_wand', 0.7), (x, y))
     elif p.is_walk:
-        screen.blit(play_animation(f'walk_{p.walk_direction}', 1.5), (p.x, p.y))
+        screen.blit(play_animation(f'walk_{p.walk_direction}', 1.5), (x, y))
     else:
-        screen.blit(animations[f'walk_{p.walk_direction}']['images'][0], (p.x, p.y))
-    draw_hp(screen, p, pos=(p.x+7, p.y-10))
-    draw_username(screen, p, pos=(p.x+7, p.y-35))
+        screen.blit(animations[f'walk_{p.walk_direction}']['images'][0], (x, y))
+    draw_hp(screen, p, pos=(x+7, y-10))
+    draw_username(screen, p, pos=(x+7, y-35))
 
 def render_tower(screen, t):
     if t.type != 'Destroyed_Tower':
@@ -313,6 +320,16 @@ def render_tower(screen, t):
 def update_display(screen):
     # render map
     screen.blit(images['Map'], (0, 0))
+    # render grid painting
+    grid_width = WINDOW_WIDTH / GRID_COL
+    grid_height = WINDOW_HEIGHT / GRID_ROW
+    for i in range(GRID_ROW):
+        for j in range(GRID_COL):
+            if grid[i][j] != -1:
+                color = grid[i][j][1] # color = grid[i][j]['color']
+                color_surface = pygame.Surface((grid_width, grid_height), pygame.SRCALPHA)
+                color_surface.fill((color[0], color[1], color[2], 128))                         
+                screen.blit(color_surface, (j*grid_width, i*grid_height))
 
     # render me
     render_player(screen, me)
@@ -327,22 +344,31 @@ def update_display(screen):
 
     pygame.display.update()
 
+def is_in_world_border(x, y):
+    if (30 <= x <= WINDOW_WIDTH-30) and (30 <= y <= WINDOW_HEIGHT-30):
+        return True
+    return False
+
 def handle_move():
     keys = pygame.key.get_pressed()
     if keys[pygame.K_w] or keys[pygame.K_UP]:
-        me.move_to(me.x, me.y-me.velocity)
+        if is_in_world_border(me.x, me.y-me.velocity):
+            me.move_to(me.x, me.y-me.velocity)
         me.is_walk = True
         me.walk_direction = 'top'
     elif keys[pygame.K_a] or keys[pygame.K_LEFT]:
-        me.move_to(me.x-me.velocity, me.y)
+        if is_in_world_border(me.x-me.velocity, me.y):
+            me.move_to(me.x-me.velocity, me.y)
         me.is_walk = True
         me.walk_direction = 'left'
     elif keys[pygame.K_s] or keys[pygame.K_DOWN]:
-        me.move_to(me.x, me.y+me.velocity)
+        if is_in_world_border(me.x, me.y+me.velocity):
+            me.move_to(me.x, me.y+me.velocity)
         me.is_walk = True
         me.walk_direction = 'bottom'
     elif keys[pygame.K_d] or keys[pygame.K_RIGHT]:
-        me.move_to(me.x+me.velocity, me.y)
+        if is_in_world_border(me.x+me.velocity, me.y):
+            me.move_to(me.x+me.velocity, me.y)
         me.is_walk = True
         me.walk_direction = 'right'
     else:
@@ -354,7 +380,7 @@ def dead():
 
 def respawn():
     # move player back to the map
-    me.x = me.y = 15
+    me.x = me.y = 30
 
 def distance(x1, y1, x2, y2):
     return ((x1-x2)**2 + (y1-y2)**2) ** 0.5
@@ -411,8 +437,8 @@ def main():
 
     # create or join room
     print('Welcome to Soul Beats 1 !!')
-    while not (1 <= len(me.username) <= 10):
-        me.username = input('Username >> ')
+    while not (1 <= len(me.username) <= 8):
+        me.username = input('Display Name >> ')
     print('1) Create New Room\n2) Join Room with Room ID')
     choice = input('Select 1 or 2 >> ')
     if choice == '1':

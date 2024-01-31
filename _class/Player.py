@@ -6,6 +6,8 @@ class Player:
         self.character = character
         self.username = ''
 
+        self.color = (0, 255, 0)
+
         self.velocity = 5
 
         self.hp = 100
