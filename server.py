@@ -150,7 +150,7 @@ def paint_grid(connection_id, players):
     col = math.floor(p.x / grid_width) # col
     row = math.floor(p.y / grid_height) # row
     
-    if 0 < row < GRID_ROW and 0 < col < GRID_COL:
+    if 0 <= row <= GRID_ROW and 0 <= col <= GRID_COL:
         rooms[room_id]['grid'][row][col] = [connection_id, p.color]
 
 def get_scores(players, grid):
@@ -163,10 +163,10 @@ def get_scores(players, grid):
     for i in range(GRID_ROW):
         for j in range(GRID_COL):
             if grid[i][j] != -1:
-                # connection_id = grid[i][j]['connection_id']
                 connection_id = grid[i][j][0]
                 scores[connection_id]['score'] += 1
 
+    return scores
 
 def handle_update_state(conn, connection_id, players, this_player, towers, grid):
     # for first time

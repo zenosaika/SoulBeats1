@@ -317,19 +317,50 @@ def render_tower(screen, t):
     else:
         screen.blit(animations['megia_dead']['images'][4], (t.x, t.y)) 
 
+def render_scoreboard(screen):
+    font = pygame.font.SysFont('Comic Sans MS', 16)
+    cnt = 0
+    for k, v in scores.items():
+        score = f"{v['username']} : {v['score']} blocks"
+        screen.blit(font.render(score, False, (255, 255, 255)), (15, 650-20*cnt))
+        cnt += 1
+
+def render_skill_cooldown(screen):
+    font = pygame.font.SysFont('Comic Sans MS', 16)
+    timestamp_now = time.time()
+
+    skill1_cooldown = skills[1]['cooldown'] - (timestamp_now - me.skill1_last_timestamp)
+    skill1_cooldown = 'Ready!' if skill1_cooldown <= 0 else f'{skill1_cooldown:.0f}'
+    screen.blit(font.render(f'[SPACE] Soul Blade : {skill1_cooldown}', False, (255, 255, 255)), (475, 610))
+
+    skill2_cooldown = skills[2]['cooldown'] - (timestamp_now - me.skill2_last_timestamp)
+    skill2_cooldown = 'Ready!' if skill2_cooldown <= 0 else f'{skill2_cooldown:.0f}'
+    screen.blit(font.render(f'[E] Soul Daze : {skill2_cooldown}', False, (255, 255, 255)), (475, 630))
+
+    skill3_cooldown = skills[3]['cooldown'] - (timestamp_now - me.skill3_last_timestamp)
+    skill3_cooldown = 'Ready!' if skill3_cooldown <= 0 else f'{skill3_cooldown:.0f}'
+    screen.blit(font.render(f'[Q] Soul Blue : {skill3_cooldown}', False, (255, 255, 255)), (475, 650))
+
 def update_display(screen):
     # render map
     screen.blit(images['Map'], (0, 0))
+
     # render grid painting
     grid_width = WINDOW_WIDTH / GRID_COL
     grid_height = WINDOW_HEIGHT / GRID_ROW
     for i in range(GRID_ROW):
         for j in range(GRID_COL):
             if grid[i][j] != -1:
-                color = grid[i][j][1] # color = grid[i][j]['color']
+                color = grid[i][j][1]
                 color_surface = pygame.Surface((grid_width, grid_height), pygame.SRCALPHA)
                 color_surface.fill((color[0], color[1], color[2], 128))                         
                 screen.blit(color_surface, (j*grid_width, i*grid_height))
+
+    # render scoreboard
+    render_scoreboard(screen)
+
+    # render skill cooldown
+    render_skill_cooldown(screen)
 
     # render me
     render_player(screen, me)
