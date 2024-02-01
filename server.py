@@ -303,14 +303,15 @@ def handle_packet(conn, packet, connection_id):
 def handle_connection(conn, addr, connection_id):
     while True:
 
-
-        packet = conn.recv(4096) # return packet or null
-        if packet:
-            packet = pickle.loads(packet)
-            handle_packet(conn, packet, connection_id) 
-        else:
-            break # client disconnected
-
+        try:
+            packet = conn.recv(4096) # return packet or null
+            if packet:
+                packet = pickle.loads(packet)
+                handle_packet(conn, packet, connection_id) 
+            else:
+                break # client disconnected
+        except:
+            break
 
     conn.close()
     print(f'{addr} disconnected.')

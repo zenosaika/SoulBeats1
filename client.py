@@ -337,11 +337,21 @@ def render_tower(screen, t):
 
 def render_scoreboard(screen):
     font = pygame.font.SysFont('Comic Sans MS', 16)
-    cnt = 0
-    for k, v in scores.items():
-        score = f"{v['username']} : {v['score']} blocks"
-        screen.blit(font.render(score, False, (255, 255, 255)), (15, 650-20*cnt))
-        cnt += 1
+    scoreboard = []
+
+    for v in scores.values():
+        scoreboard.append((v['score'], v['username']))
+
+    scoreboard = sorted(scoreboard)
+
+    for i, (score, username) in enumerate(scoreboard):
+        score = f"{username} : {score} blocks"
+        screen.blit(font.render(score, False, (255, 255, 255)), (15, 650-20*i))
+
+    if is_game_start == False and len(scoreboard) > 0:
+        font = pygame.font.SysFont('Comic Sans MS', 24)
+        winner = scoreboard[-1]
+        screen.blit(font.render(f'The winner is {winner[1]}', False, (255, 215, 0)), (250, 70))
 
 def render_skill_cooldown(screen):
     font = pygame.font.SysFont('Comic Sans MS', 16)
@@ -353,19 +363,28 @@ def render_skill_cooldown(screen):
 
     skill2_cooldown = skills[2]['cooldown'] - (timestamp_now - me.skill2_last_timestamp)
     skill2_cooldown = 'Ready!' if skill2_cooldown <= 0 else f'{skill2_cooldown:.0f}'
-    screen.blit(font.render(f'   [E]   Soul Daze : {skill2_cooldown}', False, (255, 255, 255)), (475, 630))
+    screen.blit(font.render(f'       [E]   Soul Daze : {skill2_cooldown}', False, (255, 255, 255)), (475, 630))
 
     skill3_cooldown = skills[3]['cooldown'] - (timestamp_now - me.skill3_last_timestamp)
     skill3_cooldown = 'Ready!' if skill3_cooldown <= 0 else f'{skill3_cooldown:.0f}'
-    screen.blit(font.render(f'   [Q]   Soul Blue : {skill3_cooldown}', False, (255, 255, 255)), (475, 650))
+    screen.blit(font.render(f'       [Q]   Soul Blue : {skill3_cooldown}', False, (255, 255, 255)), (475, 650))
 
 def render_timeleft(screen):
     font = pygame.font.SysFont('Comic Sans MS', 28)
     timestamp_now = time.time()
 
     timeleft = GAME_DURATION - (timestamp_now - game_start_timestamp)
-    timeleft = 'Match Finished' if timeleft <= 0 else f'{timeleft:.0f} seconds'
-    screen.blit(font.render(timeleft, False, (255, 255, 255)), (270, 30))
+    timeleft = 'Match Finished' if timeleft <= 0 else f'   {timeleft:.0f} seconds'
+    screen.blit(font.render(timeleft, False, (255, 255, 255)), (266, 30))
+
+def render_text(screen, text, size, color, pos, bg=(-1, -1, -1, 0)):
+    if bg != (-1, -1, -1, 0):
+        padding = 5 
+        text_bg = pygame.Surface((len(text)*size/2+padding*2, size+padding*2), pygame.SRCALPHA)
+        text_bg.fill((bg[0], bg[1], bg[2], bg[3]))                        
+        screen.blit(text_bg, (pos[0]-padding, pos[1]))
+    font = pygame.font.SysFont('Comic Sans MS', size)
+    screen.blit(font.render(text, False, color), pos)
 
 def update_display(screen):
     # render map
@@ -402,6 +421,9 @@ def update_display(screen):
     # render skill cooldown
     render_skill_cooldown(screen)
     render_timeleft(screen)
+
+    if is_game_start == False and me.ready == False:
+        render_text(screen, 'Press R to Ready', size=24, color=(255, 255, 255), pos=(265, 335), bg=(0, 0, 0, 128))
 
     pygame.display.update()
 
