@@ -16,8 +16,9 @@ rooms = {}
 
 GRID_COL = 20
 GRID_ROW = 20
-WINDOW_WIDTH = 700
-WINDOW_HEIGHT = 700
+GAME_WIDTH = 700
+GAME_HEIGHT = 700
+GAME_DURATION = 60 # seconds
 
 # Skills
 skills = {
@@ -49,7 +50,13 @@ def create_room(conn, connection_id):
     while room_id in rooms:
         room_id = random.randrange(1000, 10000)
 
-    rooms[room_id] = {'players':{}, 'towers': create_towers(), 'grid':[[-1]*GRID_COL for _ in range(GRID_ROW)]} # create new room
+    rooms[room_id] = {
+        'players':{}, 
+        'towers': create_towers(), 
+        'grid':[[-1]*GRID_COL for _ in range(GRID_ROW)],
+        'is_game_start': False,
+        'game_start_timestamp': 0,
+    } # create new room
     connections[connection_id]['room_id'] = room_id # move this connection to the room
 
     # send room_id to client
@@ -80,7 +87,7 @@ def handle_skill(connection_id, players, towers):
     this_player = players[connection_id]
     timestamp_now = time.time()
 
-    # Skill 1 : Soul Blade
+    # Skill 1 : Soul Eater
     if (this_player.use_skill1 and
         timestamp_now - this_player.skill1_last_timestamp > skills[1]['cooldown']):
         this_player.skill1_last_timestamp = timestamp_now
@@ -106,7 +113,7 @@ def handle_skill(connection_id, players, towers):
                 if distance(this_player.x, this_player.y, v.x, v.y) <= skills[2]['radius']:
                     v.hp -= skills[2]['damage']
 
-    # Skill 3 : 
+    # Skill 3 : Soul Blue
     if (this_player.use_skill3 and
         timestamp_now - this_player.skill3_last_timestamp > skills[3]['cooldown']):
         this_player.skill3_last_timestamp = timestamp_now
@@ -141,8 +148,8 @@ def tower_attack(connection_id, players, towers):
 def paint_grid(connection_id, players):
     p = players[connection_id]
 
-    grid_width = WINDOW_WIDTH / GRID_COL
-    grid_height = WINDOW_HEIGHT / GRID_ROW
+    grid_width = GAME_WIDTH / GRID_COL
+    grid_height = GAME_HEIGHT / GRID_ROW
 
     room_id = connections[connection_id]['room_id']
 
@@ -168,11 +175,50 @@ def get_scores(players, grid):
 
     return scores
 
-def handle_update_state(conn, connection_id, players, this_player, towers, grid):
+def handle_check_game_status(conn, room_id, connection_id, players, this_player):
     # for first time
     if connection_id not in players:
         players[connection_id] = this_player
 
+    p = players[connection_id]
+    p.ready = this_player.ready
+
+    if rooms[room_id]['is_game_start'] == False:
+        # check if all player are ready
+        game_start = True
+        for v in players.values():
+            if v.ready == False:
+                game_start = False
+                break
+
+        if game_start:
+            rooms[room_id]['is_game_start'] = True
+            rooms[room_id]['game_start_timestamp'] = time.time()
+
+            # reset room states to default
+            rooms[room_id]['towers'] = create_towers()
+            rooms[room_id]['grid'] = [[-1]*GRID_COL for _ in range(GRID_ROW)]
+            # reset hp and cooldown too
+            for v in players.values():
+                v.hp = v.max_hp
+                v.use_skill1 = False
+                v.use_skill2 = False
+                v.use_skill3 = False
+                v.skill1_last_timestamp = 0
+                v.skill2_last_timestamp = 0
+                v.skill3_last_timestamp = 0
+                v.death_timestamp = 0
+
+     # send game status to client
+    conn.send(pickle.dumps({
+        'header': 'check_game_status',
+        'body': {
+            'is_game_start': rooms[room_id]['is_game_start'],
+            'game_start_timestamp': rooms[room_id]['game_start_timestamp'],
+        }
+    }))
+
+def handle_update_state(conn, connection_id, players, this_player, towers, grid, room_id):
     # update this player state on server
     p = players[connection_id] # p is a Player object
     p.x = this_player.x
@@ -206,7 +252,11 @@ def handle_update_state(conn, connection_id, players, this_player, towers, grid)
     for t in towers.values():
         if t.hp <= 0:
             t.type = 'Destroyed_Tower'
-    
+
+    # check if time is up
+    if timestamp_now - rooms[room_id]['game_start_timestamp'] > GAME_DURATION:
+        rooms[room_id]['is_game_start'] = False
+
     # send server states to client
     conn.send(pickle.dumps({
         'header': 'update_server_state',
@@ -234,26 +284,33 @@ def handle_packet(conn, packet, connection_id):
         room_id = body['room_id']
         join_room(conn, connection_id, room_id)
 
-    elif header == 'update_state':
-        room_id = connections[connection_id]['room_id'] # get current room_id of this player 
-        players = rooms[room_id]['players'] # dict of Player object of that room
-        towers = rooms[room_id]['towers'] # dict of Player object of that room
+    elif header == 'check_game_status':
+        room_id = connections[connection_id]['room_id'] # get current room_id of this player
+        players = rooms[room_id]['players']
+        towers = rooms[room_id]['towers']
         grid = rooms[room_id]['grid']
         this_player = body['me']
-        handle_update_state(conn, connection_id, players, this_player, towers, grid)
+        handle_check_game_status(conn, room_id, connection_id, players, this_player)
+
+    elif header == 'update_state': 
+        room_id = connections[connection_id]['room_id'] # get current room_id of this player
+        players = rooms[room_id]['players']
+        towers = rooms[room_id]['towers']
+        grid = rooms[room_id]['grid']
+        this_player = body['me']
+        handle_update_state(conn, connection_id, players, this_player, towers, grid, room_id)
 
 def handle_connection(conn, addr, connection_id):
     while True:
 
-        try:
-            packet = conn.recv(4096) # return packet or null
-            if packet:
-                packet = pickle.loads(packet)
-                handle_packet(conn, packet, connection_id) 
-            else:
-                break # client disconnected
-        except:
-            break
+
+        packet = conn.recv(4096) # return packet or null
+        if packet:
+            packet = pickle.loads(packet)
+            handle_packet(conn, packet, connection_id) 
+        else:
+            break # client disconnected
+
 
     conn.close()
     print(f'{addr} disconnected.')

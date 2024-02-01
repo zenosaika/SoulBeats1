@@ -3,6 +3,7 @@ import pickle
 import pygame
 import time
 import math
+import random
 from _thread import start_new_thread
 
 from _class.Player import Player
@@ -13,10 +14,13 @@ SERVER_PORT = 8080
 
 # Game Config
 FPS = 60
-WINDOW_WIDTH = 700
-WINDOW_HEIGHT = 700
+GAME_WIDTH = 700
+GAME_HEIGHT = 700
 GRID_COL = 20
 GRID_ROW = 20
+WINDOW_WIDTH = 700
+WINDOW_HEIGHT = 700
+GAME_DURATION = 60 # seconds
 
 # Global Variables
 room_joined = False
@@ -25,6 +29,8 @@ towers = [] # store Tower objects
 grid = [[-1]*GRID_COL for _ in range(GRID_ROW)]
 scores = {}
 me = Player(x=35, y=35, character='Heron')
+is_game_start = False
+game_start_timestamp = 0
 
 # Skills
 skills = {
@@ -69,7 +75,7 @@ def image_at(sheet, rectangle, resize_to, colorkey=None):
     return image
 
 images = {
-    'Map': load_image('_asset/map.png', resize_to=(WINDOW_WIDTH, WINDOW_HEIGHT)),
+    'Map': load_image('_asset/map.png', resize_to=(GAME_WIDTH, GAME_HEIGHT)),
 }
 
 def images_at(sheet, rects, resize_to, colorkey=None):
@@ -205,7 +211,7 @@ def play_animation(animation_name, duration):
     return image_at_this_frame
 
 def handle_packet(packet):
-    global me, players, towers, grid, scores, room_joined
+    global me, players, towers, grid, scores, room_joined, is_game_start, game_start_timestamp
     header = packet['header']
     body = packet['body']
 
@@ -220,6 +226,10 @@ def handle_packet(packet):
 
     elif header == 'join_failed':
         print(f'[SERVER]: {body["error"]}')
+
+    elif header == 'check_game_status':
+        is_game_start = body['is_game_start']
+        game_start_timestamp =  body['game_start_timestamp']
 
     elif header == 'update_server_state':
         players = body['players']
@@ -265,6 +275,14 @@ def handle_connection(s, mode, room_id=-1):
         s.send(pickle.dumps({
             'header': 'join_room',
             'body': {'room_id': room_id}
+        }))
+
+    elif mode == 'check_game_status':
+        s.send(pickle.dumps({
+            'header': 'check_game_status',
+            'body': {
+                'me': me
+            }
         }))
 
     try:
@@ -331,23 +349,31 @@ def render_skill_cooldown(screen):
 
     skill1_cooldown = skills[1]['cooldown'] - (timestamp_now - me.skill1_last_timestamp)
     skill1_cooldown = 'Ready!' if skill1_cooldown <= 0 else f'{skill1_cooldown:.0f}'
-    screen.blit(font.render(f'[SPACE] Soul Blade : {skill1_cooldown}', False, (255, 255, 255)), (475, 610))
+    screen.blit(font.render(f'[SPACE] Soul Eater : {skill1_cooldown}', False, (255, 255, 255)), (475, 610))
 
     skill2_cooldown = skills[2]['cooldown'] - (timestamp_now - me.skill2_last_timestamp)
     skill2_cooldown = 'Ready!' if skill2_cooldown <= 0 else f'{skill2_cooldown:.0f}'
-    screen.blit(font.render(f'[E] Soul Daze : {skill2_cooldown}', False, (255, 255, 255)), (475, 630))
+    screen.blit(font.render(f'   [E]   Soul Daze : {skill2_cooldown}', False, (255, 255, 255)), (475, 630))
 
     skill3_cooldown = skills[3]['cooldown'] - (timestamp_now - me.skill3_last_timestamp)
     skill3_cooldown = 'Ready!' if skill3_cooldown <= 0 else f'{skill3_cooldown:.0f}'
-    screen.blit(font.render(f'[Q] Soul Blue : {skill3_cooldown}', False, (255, 255, 255)), (475, 650))
+    screen.blit(font.render(f'   [Q]   Soul Blue : {skill3_cooldown}', False, (255, 255, 255)), (475, 650))
+
+def render_timeleft(screen):
+    font = pygame.font.SysFont('Comic Sans MS', 28)
+    timestamp_now = time.time()
+
+    timeleft = GAME_DURATION - (timestamp_now - game_start_timestamp)
+    timeleft = 'Match Finished' if timeleft <= 0 else f'{timeleft:.0f} seconds'
+    screen.blit(font.render(timeleft, False, (255, 255, 255)), (270, 30))
 
 def update_display(screen):
     # render map
     screen.blit(images['Map'], (0, 0))
 
     # render grid painting
-    grid_width = WINDOW_WIDTH / GRID_COL
-    grid_height = WINDOW_HEIGHT / GRID_ROW
+    grid_width = GAME_WIDTH / GRID_COL
+    grid_height = GAME_HEIGHT / GRID_ROW
     for i in range(GRID_ROW):
         for j in range(GRID_COL):
             if grid[i][j] != -1:
@@ -358,9 +384,6 @@ def update_display(screen):
 
     # render scoreboard
     render_scoreboard(screen)
-
-    # render skill cooldown
-    render_skill_cooldown(screen)
 
     # render me
     render_player(screen, me)
@@ -373,10 +396,17 @@ def update_display(screen):
     for t in towers:
         render_tower(screen, t)
 
+    # render rightbar menu
+    # pygame.draw.rect(screen, (32, 32, 32), pygame.Rect(GAME_WIDTH, 0, WINDOW_WIDTH-GAME_WIDTH, WINDOW_HEIGHT))
+
+    # render skill cooldown
+    render_skill_cooldown(screen)
+    render_timeleft(screen)
+
     pygame.display.update()
 
 def is_in_world_border(x, y):
-    if (30 <= x <= WINDOW_WIDTH-30) and (30 <= y <= WINDOW_HEIGHT-30):
+    if (30 <= x <= GAME_WIDTH-30) and (30 <= y <= GAME_HEIGHT-30):
         return True
     return False
 
@@ -420,7 +450,7 @@ def handle_skill():
     timestamp_now = time.time()
     keys = pygame.key.get_pressed()
 
-    # Skill 1 : Soul Blade
+    # Skill 1 : Soul Eater
     if keys[pygame.K_SPACE] and timestamp_now - me.skill1_last_timestamp > skills[1]['cooldown']:
         me.skill1_last_timestamp = timestamp_now
         me.skill1()
@@ -450,6 +480,7 @@ def handle_skill():
 
         me.skill2()
 
+    # Skill 3 : Soul Blue
     elif keys[pygame.K_q] and timestamp_now - me.skill3_last_timestamp > skills[3]['cooldown']:
         me.skill1_last_timestamp = timestamp_now
         me.skill3()
@@ -479,6 +510,9 @@ def main():
             room_id = int(input('Room ID >> '))
             handle_connection(s, mode='join_room', room_id=room_id)
 
+    # random color
+    me.color = (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
+
     running = True
     while running: # game main loop
         clock.tick(FPS) # set FPS
@@ -488,18 +522,32 @@ def main():
                 running = False
                 break
 
-        handle_move()
-        handle_skill()
+        keys = pygame.key.get_pressed()
+        if keys[pygame.K_r] and is_game_start == False:
+            me.ready = True
 
-        if me.is_dead:
-            dead()
-        if me.is_respawn:
-            respawn()
+        if is_game_start:
+            if me.ready:
+                me.ready = False
+                me.x = me.y = 30
+
+            handle_move()
+            handle_skill()
+
+            if me.is_dead:
+                dead()
+            if me.is_respawn:
+                respawn()
+
+            try:
+                start_new_thread(handle_connection, (s, 'update_state'))
+            except Exception as e:
+                ...
 
         try:
-            start_new_thread(handle_connection, (s, 'update_state'))
+            start_new_thread(handle_connection, (s, 'check_game_status'))
         except Exception as e:
-            print(e)
+            ...
 
         update_display(screen)
 
