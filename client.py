@@ -4,6 +4,7 @@ import pygame
 import time
 import math
 import random
+import colorsys
 from _thread import start_new_thread
 
 from _class.Player import Player
@@ -349,9 +350,9 @@ def render_scoreboard(screen):
         screen.blit(font.render(score, False, (255, 255, 255)), (15, 650-20*i))
 
     if is_game_start == False and len(scoreboard) > 0:
-        font = pygame.font.SysFont('Comic Sans MS', 24)
         winner = scoreboard[-1]
-        screen.blit(font.render(f'The winner is {winner[1]}', False, (255, 215, 0)), (250, 70))
+        render_text(screen, f'The winner is {winner[1]}', size=24, color=(255, 215, 0), pos=(250, 70), bg=(0, 0, 0, 128))
+        # screen.blit(font.render(f'The winner is {winner[1]}', False, (255, 215, 0)), (250, 70))
 
 def render_skill_cooldown(screen):
     font = pygame.font.SysFont('Comic Sans MS', 16)
@@ -401,9 +402,6 @@ def update_display(screen):
                 color_surface.fill((color[0], color[1], color[2], 128))                         
                 screen.blit(color_surface, (j*grid_width, i*grid_height))
 
-    # render scoreboard
-    render_scoreboard(screen)
-
     # render me
     render_player(screen, me)
 
@@ -418,7 +416,7 @@ def update_display(screen):
     # render rightbar menu
     # pygame.draw.rect(screen, (32, 32, 32), pygame.Rect(GAME_WIDTH, 0, WINDOW_WIDTH-GAME_WIDTH, WINDOW_HEIGHT))
 
-    # render skill cooldown
+    render_scoreboard(screen)
     render_skill_cooldown(screen)
     render_timeleft(screen)
 
@@ -517,12 +515,15 @@ def main():
     pygame.font.init()
     clock = pygame.time.Clock()
     screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
+    pygame.mixer.music.load('_asset/NightShade.mp3')
     pygame.display.set_caption('Soul Beats 1')
 
     # create or join room
     print('Welcome to Soul Beats 1 !!')
     while not (1 <= len(me.username) <= 8):
         me.username = input('Display Name >> ')
+    pygame.display.set_caption(f'Soul Beats 1 ({me.username})')
+
     print('1) Create New Room\n2) Join Room with Room ID')
     choice = input('Select 1 or 2 >> ')
     if choice == '1':
@@ -533,7 +534,10 @@ def main():
             handle_connection(s, mode='join_room', room_id=room_id)
 
     # random color
-    me.color = (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
+    # _h, _s, _l = random.random(), 0.5+random.random()/2.0, 0.4+ random.random()/5.0
+    # r, g, b = [int(256*i) for i in colorsys.hls_to_rgb(_h, _l, _s)]
+    r, g, b = random.randint(0, 255), random.randint(0, 255), random.randint(0, 255)
+    me.color = (r, g, b)
 
     running = True
     while running: # game main loop
@@ -549,9 +553,10 @@ def main():
             me.ready = True
 
         if is_game_start:
-            if me.ready:
+            if me.ready: # for the first time
                 me.ready = False
                 me.x = me.y = 30
+                pygame.mixer.music.play(loops = 0, start = 10.0, fade_ms = 0)
 
             handle_move()
             handle_skill()
