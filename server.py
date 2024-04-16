@@ -7,7 +7,7 @@ from _thread import start_new_thread
 
 from _class.Tower import Tower
 
-SERVER_IP = '0.0.0.0'
+SERVER_IP = '127.0.0.1'
 SERVER_PORT = 8080
 
 # Server States

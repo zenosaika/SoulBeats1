@@ -5,6 +5,7 @@ import time
 import math
 import random
 import colorsys
+import pygame_textinput
 from _thread import start_new_thread
 
 from _class.Player import Player
@@ -32,6 +33,7 @@ scores = {}
 me = Player(x=35, y=35, character='Heron')
 is_game_start = False
 game_start_timestamp = 0
+current_room_id = -1
 
 # Skills
 skills = {
@@ -77,6 +79,8 @@ def image_at(sheet, rectangle, resize_to, colorkey=None):
 
 images = {
     'Map': load_image('_asset/map.png', resize_to=(GAME_WIDTH, GAME_HEIGHT)),
+    'Lobby1': load_image('_asset/lobby1.png', resize_to=(GAME_WIDTH, GAME_HEIGHT)),
+    'Lobby2': load_image('_asset/lobby2.png', resize_to=(GAME_WIDTH, GAME_HEIGHT)),
 }
 
 def images_at(sheet, rects, resize_to, colorkey=None):
@@ -220,6 +224,8 @@ def handle_packet(packet):
         room_joined = True
         print('[ROOM]: Welcome!')
         print(f'[ROOM]: This room id is {body["room_id"]}')
+        global current_room_id
+        current_room_id = body["room_id"]
 
     elif header == 'join_success':
         room_joined = True
@@ -336,6 +342,10 @@ def render_tower(screen, t):
     else:
         screen.blit(animations['megia_dead']['images'][4], (t.x, t.y)) 
 
+def render_room_id(screen):
+    font = pygame.font.SysFont('Comic Sans MS', 15)
+    screen.blit(font.render(f'Room ID: {current_room_id}', False, (255, 255, 255)), (WINDOW_WIDTH-120, 10))
+
 def render_scoreboard(screen):
     font = pygame.font.SysFont('Comic Sans MS', 16)
     scoreboard = []
@@ -419,6 +429,7 @@ def update_display(screen):
     render_scoreboard(screen)
     render_skill_cooldown(screen)
     render_timeleft(screen)
+    render_room_id(screen)
 
     if is_game_start == False and me.ready == False:
         render_text(screen, 'Press R to Ready', size=24, color=(255, 255, 255), pos=(265, 335), bg=(0, 0, 0, 128))
@@ -520,18 +531,113 @@ def main():
 
     # create or join room
     print('Welcome to Soul Beats 1 !!')
-    while not (1 <= len(me.username) <= 8):
-        me.username = input('Display Name >> ')
+
+    font = pygame.font.SysFont("superclarendon", 55)
+    manager = pygame_textinput.TextInputManager(validator = lambda input: len(input) <= 8)
+    textinput_custom = pygame_textinput.TextInputVisualizer(manager=manager, font_object=font)
+
+    textinput_custom.cursor_width = 4
+    textinput_custom.cursor_blink_interval = 400 # blinking interval in ms
+    textinput_custom.antialias = False
+    textinput_custom.font_color = (0, 85, 170)
+
+    while True: # Set Username Loop
+        # screen.fill((0, 0, 0))
+        screen.blit(images['Lobby1'], (0, 0))
+
+        events = pygame.event.get()
+
+        # Feed it with events every frame
+        textinput_custom.update(events)
+
+        # Get its surface to blit onto the screen
+        # screen.blit(textinput.surface, (10, 10))
+        len_text = len(textinput_custom.value)
+        screen.blit(textinput_custom.surface, (WINDOW_WIDTH/2 - 16*len_text, WINDOW_HEIGHT/2 - 20))
+
+        # Modify attributes on the fly - the surface is only rerendered when .surface is accessed & if values changed
+        textinput_custom.font_color = [(c+10)%255 for c in textinput_custom.font_color]
+
+        for event in events:
+            if event.type == pygame.QUIT:
+                exit()
+
+        keys = pygame.key.get_pressed()
+        if keys[pygame.K_RETURN]:
+            if 0 < len(textinput_custom.value) <= 8:
+                me.username = textinput_custom.value
+                break
+
+        pygame.display.update()
+        clock.tick(30)
+
     pygame.display.set_caption(f'Soul Beats 1 ({me.username})')
 
-    print('1) Create New Room\n2) Join Room with Room ID')
-    choice = input('Select 1 or 2 >> ')
-    if choice == '1':
-        handle_connection(s, mode='create_room')
-    else:
-        while not room_joined:
-            room_id = int(input('Room ID >> '))
-            handle_connection(s, mode='join_room', room_id=room_id)
+    font = pygame.font.SysFont("superclarendon", 55)
+    manager = pygame_textinput.TextInputManager(validator = lambda input: len(input) <= 4)
+    textinput_custom = pygame_textinput.TextInputVisualizer(manager=manager, font_object=font)
+
+    textinput_custom.cursor_width = 4
+    textinput_custom.cursor_blink_interval = 400 # blinking interval in ms
+    textinput_custom.antialias = False
+    textinput_custom.font_color = (0, 85, 170)
+
+    # Create a surface for the button
+    button_surface = pygame.Surface((150, 50))
+
+    # Render text on the button
+    font2 = pygame.font.SysFont("superclarendon", 23)
+    text = font2.render("New Room", True, (0, 0, 0))
+    text_rect = text.get_rect(center=(button_surface.get_width()/2, button_surface.get_height()/2))
+    button_rect = pygame.Rect(20, WINDOW_HEIGHT - 70, 150, 50)
+
+    while not room_joined: # Join Room Loop
+        # screen.fill((0, 0, 0))
+        screen.blit(images['Lobby2'], (0, 0))
+
+        events = pygame.event.get()
+
+        # Feed it with events every frame
+        textinput_custom.update(events)
+
+        len_text = len(textinput_custom.value)
+        screen.blit(textinput_custom.surface, (WINDOW_WIDTH/2 - 18*len_text, WINDOW_HEIGHT/2 - 24))
+
+        # Modify attributes on the fly - the surface is only rerendered when .surface is accessed & if values changed
+        textinput_custom.font_color = [(c+10)%255 for c in textinput_custom.font_color]
+
+        for event in events:
+            if event.type == pygame.QUIT:
+                exit()
+        
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                if button_rect.collidepoint(event.pos):
+                    handle_connection(s, mode='create_room')
+        
+        if button_rect.collidepoint(pygame.mouse.get_pos()):
+            pygame.draw.rect(button_surface, (127, 255, 212), (1, 1, 148, 48))
+        else:
+            pygame.draw.rect(button_surface, (0, 0, 0), (0, 0, 150, 50))
+            pygame.draw.rect(button_surface, (255, 255, 255), (1, 1, 148, 48))
+            pygame.draw.rect(button_surface, (0, 0, 0), (1, 1, 148, 1), 2)
+            pygame.draw.rect(button_surface, (0, 100, 0), (1, 48, 148, 10), 2)
+
+        # Shwo the button text
+        button_surface.blit(text, text_rect)
+
+        # Draw the button on the screen
+        screen.blit(button_surface, (button_rect.x, button_rect.y))
+
+        keys = pygame.key.get_pressed()
+        if keys[pygame.K_RETURN]:
+            if len(textinput_custom.value) == 4:
+                global current_room_id
+                current_room_id = int(textinput_custom.value)
+                handle_connection(s, mode='join_room', room_id=current_room_id)
+
+        pygame.display.update()
+        clock.tick(30)
+
 
     # random color
     # _h, _s, _l = random.random(), 0.5+random.random()/2.0, 0.4+ random.random()/5.0

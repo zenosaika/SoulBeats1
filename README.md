@@ -21,6 +21,7 @@ ngrok tcp 8080
 - [Character Sprite Generator](https://sanderfrenken.github.io/Universal-LPC-Spritesheet-Character-Generator)
 - [Procedural Orb Generator](https://itch.io/queue/c/1866035/pixel-art-generators?game_id=1495273)
 - [RPG Map Maker](https://deepnight.net/tools/rpg-map/)
+- [Space 8bit Generator](https://deep-fold.itch.io/space-background-generator)
 
 ## Presentation
 <img src="https://github.com/zenosaika/SoulBeats1/blob/main/presentation/1.jpg"><br>
